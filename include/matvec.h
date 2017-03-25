@@ -21,6 +21,12 @@ static inline bool vector_equal(const vector va, const vector vb) {
 
 static inline void vector_zero(vector vec) { vec[0] = vec[1] = vec[2] = 0.0; }
 
+static inline void vector_negative(vector vec) {
+  vec[0] = 0.0 - vec[0];
+  vec[1] = 0.0 - vec[1];
+  vec[2] = 0.0 - vec[2];
+}
+
 static inline void vector_sum(const vector va, const vector vb, vector result) {
   result[0] = va[0] + vb[0];
   result[1] = va[1] + vb[1];
@@ -70,6 +76,12 @@ static inline double vector_dot(const vector va, const vector vb) {
 
 static inline double vector_len(const vector dist) {
   return sqrt(vector_dot(dist, dist));
+}
+
+static inline double vector_dist(const vector va, const vector vb) {
+  vector tmp;
+  vector_sub(va, vb, tmp);
+  return vector_len(tmp);
 }
 
 static inline void vector_dup(const vector vec, vector result) {

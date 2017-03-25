@@ -26,7 +26,6 @@ typedef struct {
 typedef struct {
   vector position;
   matrix polarizability;
-  double damp;
 } pol_point;
 
 typedef struct { size_t index[2]; } bond;
@@ -76,6 +75,8 @@ typedef struct {
   size_t center;
   size_t n_polfrags;
   size_t n_polpoints;
+  size_t n_include;
+  size_t *include_ptr;
   pol_fragment *polfrag_ptr;
 } cluster;
 

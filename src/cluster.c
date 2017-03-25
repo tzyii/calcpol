@@ -5,9 +5,6 @@
 #include "types.h"
 #include "utils.h"
 
-static void skiplines(FILE *fp, size_t nlines);
-static fragment *fragment_alloc(const std_efp_info *efp_ptr);
-
 static void skiplines(FILE *fp, size_t nlines) {
   char buf[1024];
   for (size_t n = 0; n < nlines; ++n) {
@@ -278,7 +275,7 @@ void fragment_load(FILE *fp, box *pbox) {
     fragment_fillinfo(pbox->frag_ptr + n);
   }
 }
-
+#if 0
 static void fragment_translate(fragment *pfrag, const vector origin,
                                const matrix lattice) {
   size_t n;
@@ -290,25 +287,16 @@ static void fragment_translate(fragment *pfrag, const vector origin,
   matrix_inv(lattice, lattice_inv);
   matrix_vector_mul(lattice_inv, dist, projected);
 
-  // fprintf(stderr, "old center: %.5f, %.5f, %.5f\n", pfrag->masscenter[0],
-  // pfrag->masscenter[1], pfrag->masscenter[2]);
   for (n = 0; n < 3; ++n) {
     tmp = modf(projected[n], &(move[n]));
     if (tmp < 0.0) {
       move[n] -= 1;
     }
   }
-  // fprintf(stderr, "move:%.5f, %.5f, %.5f\n", move[0], move[1], move[2]);
   matrix_vector_mul(lattice, move, tmpvec);
-  // fprintf(stderr, "tmpvec:%.5f, %.5f, %.5f\n", tmpvec[0], tmpvec[1],
-  // tmpvec[2]);
   vector_sum(origin, tmpvec, move);
-  // fprintf(stderr, "final move: %.5f, %.5f, %.5f\n", move[0], move[1],
-  // move[2]);
 
   vector_sub_inplace(pfrag->masscenter, move);
-  // fprintf(stderr, "current center: %.5f, %.5f, %.5f\n", pfrag->masscenter[0],
-  // pfrag->masscenter[1], pfrag->masscenter[2]);
 
   for (n = 0; n < pfrag->std_ptr->n_mult_points; ++n) {
     vector_sub_inplace(pfrag->mult_ptr[n].position, move);
@@ -319,7 +307,7 @@ static void fragment_translate(fragment *pfrag, const vector origin,
   }
 }
 
-void set_box_origin(box *pbox, size_t frag_index) {
+static void set_box_origin(box *pbox, size_t frag_index) {
   size_t n;
   vector center;
 
@@ -328,6 +316,37 @@ void set_box_origin(box *pbox, size_t frag_index) {
     fragment_translate(pbox->frag_ptr + n, center, pbox->lattice);
   }
 }
+#else
+void pseudo_set_box_origin(const box *pbox, size_t origin_index,
+                           vector **pmove) {
+  size_t i, k;
+  const fragment *pfrag;
+  double tmp;
+  vector origin, dist, projected, move, tmpvec;
+  matrix lattice_inv;
+
+  *pmove = galloc(pbox->n_frag * sizeof(vector));
+  vector_dup(pbox->frag_ptr[origin_index].masscenter, origin);
+  matrix_inv(pbox->lattice, lattice_inv);
+
+  for (i = 0; i < pbox->n_frag; ++i) {
+    pfrag = pbox->frag_ptr + i;
+    vector_sub(pfrag->masscenter, origin, dist);
+    matrix_vector_mul(lattice_inv, dist, projected);
+
+    for (k = 0; k < 3; ++k) {
+      tmp = modf(projected[k], &(move[k]));
+      if (tmp < 0.0) {
+        move[k] -= 1;
+      }
+    }
+
+    matrix_vector_mul(pbox->lattice, move, tmpvec);
+    vector_sum(origin, tmpvec, (*pmove)[i]);
+    vector_negative((*pmove)[i]);
+  }
+}
+#endif
 
 typedef struct {
   size_t n_cells;
@@ -424,9 +443,10 @@ void clear_scellptr(void) {
   list_clear(&scellptr);
 }
 
-void gen_cluster(cluster *cls, const box *pbox, double radius) {
+void gen_cluster(cluster *cls, const box *pbox, double radius,
+                 size_t idx_center) {
   fragment *pfrag;
-  vector *pvec, move, tmpcenter;
+  vector *pmove_origin, center, pbc, tmpcenter;
   list_ptr lptr = NULL, scellptr;
   const supercell *scptr;
   pol_fragment *ptr;
@@ -436,21 +456,28 @@ void gen_cluster(cluster *cls, const box *pbox, double radius) {
   cls->center = 0;
   cls->n_polfrags = 0;
   cls->n_polpoints = 0;
+  cls->n_include = 0;
+  cls->include_ptr = NULL;
+
+  pseudo_set_box_origin(pbox, idx_center, &pmove_origin);
+
   for (n = 0; n < pbox->n_frag; ++n) {
     pfrag = pbox->frag_ptr + n;
+    vector_sum(pfrag->masscenter, pmove_origin[n], center);
+
     cellsum = 0;
     notfound = 0;
     do {
       r_min = radius;
       scptr = get_supercell(cellsum);
       for (k = 0; k < scptr->n_cells; ++k) {
-        matrix_vector_mul(pbox->lattice, scptr->cell_ptr[k], move);
-        vector_sum(pfrag->masscenter, move, tmpcenter);
+        matrix_vector_mul(pbox->lattice, scptr->cell_ptr[k], pbc);
+        vector_sum(center, pbc, tmpcenter);
         r = vector_len(tmpcenter);
         if (r < radius) {
           ptr = galloc(sizeof(pol_fragment));
           ptr->original = pfrag;
-          vector_dup(tmpcenter, ptr->masscenter);
+          vector_sub(tmpcenter, pmove_origin[idx_center], ptr->masscenter);
           list_append(&lptr, ptr);
           if (scalar_equal(r, 0.0)) {
             cls->center = cls->n_polfrags;
@@ -468,22 +495,51 @@ void gen_cluster(cluster *cls, const box *pbox, double radius) {
       ++cellsum;
     } while (notfound <= 3);
   }
+
+  cls->n_include = cls->n_polfrags;
+  cls->include_ptr = galloc(cls->n_polfrags * sizeof(size_t));
+  for (n = 0; n < cls->n_polfrags; ++n) {
+    cls->include_ptr[n] = n;
+  }
+
+  free(pmove_origin);
   clear_scellptr();
   list_dump(lptr, sizeof(pol_fragment), CAST_PTR(&(cls->polfrag_ptr), void *));
   list_clear(&lptr);
 }
 
+void set_polarizable_include(cluster *cls, double radius) {
+  cls->n_include = 0;
+
+  for (size_t i = 0; i < cls->n_polfrags; ++i) {
+    if (vector_dist(cls->polfrag_ptr[cls->center].masscenter,
+                    cls->polfrag_ptr[i].masscenter) < radius) {
+      cls->include_ptr[(cls->n_include)++] = i;
+    }
+  }
+}
+
 void modify_center_charge(cluster *cls, int charge) {
-  char name[80];
-  size_t n;
+  char name[80], tmp[80];
+  int old_charge = 0;
+  size_t n, nread;
   const std_efp_info *efp_ptr;
   fragment *ptr;
 
-  if (charge == 0) {
+  nread = sscanf(cls->polfrag_ptr[cls->center].original->std_ptr->name,
+                 "%[^+-]%d", tmp, &old_charge);
+  if (nread == 1) {
+    old_charge = 0;
+  }
+
+  if (charge == old_charge) {
     return;
   }
-  snprintf(name, sizeof(name), "%s%+d",
-           cls->polfrag_ptr[cls->center].original->std_ptr->name, charge);
+  if (charge != 0) {
+    snprintf(name, sizeof(name), "%s%+d", tmp, charge);
+  } else {
+    snprintf(name, sizeof(name), "%s", tmp);
+  }
   efp_ptr = get_std_efp_info(name);
   ptr = fragment_alloc(efp_ptr);
   for (n = 0; n < ptr->std_ptr->n_atoms; ++n) {

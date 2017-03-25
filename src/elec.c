@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "fragments.h"
+#include "cluster.h"
 #include "matvec.h"
 #include "types.h"
 #include "utils.h"
@@ -146,10 +146,7 @@ static double calc_nuclear_multipole_energy(const pol_fragment *pfragA,
 static double calc_multipole_multipole_energy(const pol_fragment *pfragA,
                                               const pol_fragment *pfragB) {
   double energy = 0.0, damping, si, sj, r, r2, r3, r5, r7, r9;
-#if 0
-#else
   double dsumi, dsumj, qsumi, qsumj;
-#endif
   const mult_point *pmi, *pmj;
   vector dist, dist_opposite, moveA, moveB, moveAB;
   size_t i, j;
@@ -172,31 +169,13 @@ static double calc_multipole_multipole_energy(const pol_fragment *pfragA,
       r7 = r2 * r5;
       r9 = r2 * r7;
       damping = calc_screen_damping(pmj->screen, pmi->screen, r);
-#if 0
-#else
       dsumi = vector_dot(pmi->dipole, dist_opposite);
       dsumj = vector_dot(pmj->dipole, dist);
       qsumi = quadrupole_sum(pmi->quadrupole, dist_opposite);
       qsumj = quadrupole_sum(pmj->quadrupole, dist);
-#endif
 
       energy += damping * (pmi->monopole) * (pmj->monopole) / r;
 
-#if 0
-			energy -= (pmi->monopole) / r3 * vector_dot(pmj->dipole, dist);
-			energy += (pmi->monopole) / r5 * quadrupole_sum(pmj->quadrupole, dist);
-			energy -= (pmi->monopole) / r7 * octupole_sum(pmj->octupole, dist);
-			energy -= (pmj->monopole) / r3 * vector_dot(pmi->dipole, dist_opposite);
-			energy += (pmj->monopole) / r5 * quadrupole_sum(pmi->quadrupole, dist_opposite);
-			energy -= (pmj->monopole) / r7 * octupole_sum(pmi->octupole, dist_opposite);
-	
-			energy += vector_dot(pmi->dipole, pmj->dipole) / r3 - 3.0 * vector_dot(pmi->dipole, dist) * vector_dot(pmj->dipole, dist) / r5;
-
-			energy += 5.0 / r7 * vector_dot(pmi->dipole, dist) * quadrupole_sum(pmj->quadrupole, dist) - 2.0 / r5 * dipole_quadrupole_sum(pmi->dipole, pmj->quadrupole, dist);
-			energy += 5.0 / r7 * vector_dot(pmj->dipole, dist_opposite) * quadrupole_sum(pmi->quadrupole, dist_opposite) - 2.0 / r5 * dipole_quadrupole_sum(pmj->dipole, pmi->quadrupole, dist_opposite);
-
-			energy += (2.0 / r5 * quadrupole_quadrupole_dot(pmi->quadrupole, pmj->quadrupole) - 20.0 / r7 * quadrupole_quadrupole_sum(pmi->quadrupole, pmj->quadrupole, dist) + 35.0 / r9 * quadrupole_sum(pmi->quadrupole, dist) * quadrupole_sum(pmj->quadrupole, dist)) / 3.0;
-#else
       energy -= (pmi->monopole) / r3 * dsumj;
       energy += (pmi->monopole) / r5 * qsumj;
       energy -= (pmi->monopole) / r7 * octupole_sum(pmj->octupole, dist);
@@ -221,7 +200,6 @@ static double calc_multipole_multipole_energy(const pol_fragment *pfragA,
                                                        pmj->quadrupole, dist) +
                  35.0 / r9 * qsumi * qsumj) /
                 3.0;
-#endif
     }
   }
   return energy;
@@ -237,6 +215,12 @@ void alloc_pol_mem(cluster *pcls) {
   }
 }
 
+void free_pol_mem(cluster *pcls) {
+  for (size_t n = 0; n < pcls->n_polfrags; ++n) {
+    free(pcls->polfrag_ptr[n].pol_status);
+  }
+}
+
 void init_pol_mem(cluster *pcls) {
   for (size_t n = 0; n < pcls->n_polfrags; ++n) {
     memset(pcls->polfrag_ptr[n].pol_status, 0,
@@ -245,167 +229,136 @@ void init_pol_mem(cluster *pcls) {
   }
 }
 
-static void calc_mult_field(pol_fragment *pfragA, const cluster *pcls) {
+void init_dipole_induced(cluster *pcls) {
+  for (size_t i = 0; i < pcls->n_polfrags; ++i) {
+    for (size_t j = 0; j < pcls->polfrag_ptr[i].original->std_ptr->n_pol_points;
+         ++j) {
+      vector_zero(pcls->polfrag_ptr[i].pol_status[j].dipole);
+    }
+  }
+}
+
+void init_field_induced(cluster *pcls) {
+  for (size_t i = 0; i < pcls->n_polfrags; ++i) {
+    for (size_t j = 0; j < pcls->polfrag_ptr[i].original->std_ptr->n_pol_points;
+         ++j) {
+      vector_zero(pcls->polfrag_ptr[i].pol_status[j].field_induced);
+    }
+  }
+}
+
+void init_field_immut(cluster *pcls) {
+  for (size_t i = 0; i < pcls->n_polfrags; ++i) {
+    for (size_t j = 0; j < pcls->polfrag_ptr[i].original->std_ptr->n_pol_points;
+         ++j) {
+      vector_zero(pcls->polfrag_ptr[i].pol_status[j].field_immut);
+    }
+  }
+}
+
+void calc_mult_field(pol_fragment *pfragA, const pol_fragment *pfragB) {
   double r, r2, r3, r5, r7, damping;
-#if 0
-	double psum;
-#else
   double dsum, qsum;
-#endif
   const pol_point *ppi;
   const mult_point *pmj;
-  const pol_fragment *pfragB;
   vector dist, field, moveA, moveB, moveAB;
-#if 0
-#else
   vector field_undamped, tmpvec;
-#endif
   size_t n, i, j;
 
-  for (n = 0; n < pcls->n_polfrags; ++n) {
-    pfragB = pcls->polfrag_ptr + n;
-    if (pfragA == pfragB) {
-      continue;
+  vector_sub(pfragA->masscenter, pfragA->original->masscenter, moveA);
+  vector_sub(pfragB->masscenter, pfragB->original->masscenter, moveB);
+  vector_sub(moveA, moveB, moveAB);
+  for (i = 0; i < pfragA->original->std_ptr->n_pol_points; ++i) {
+    vector_zero(field);
+    ppi = pfragA->original->pol_ptr + i;
+    for (j = 0; j < pfragB->original->std_ptr->n_atoms; ++j) {
+      pmj = pfragB->original->mult_ptr + j;
+      vector_sub(ppi->position, pmj->position, dist);
+      vector_sum_inplace(dist, moveAB);
+      r = vector_len(dist);
+      r2 = r * r;
+      r3 = r2 * r;
+
+      damping = 1.0 - exp(-0.6 * r2) * (1.0 + 0.6 * r2);
+
+      vector_scalar_mul_sum_inplace(dist, damping * pmj->nuclear / r3, field);
     }
-    vector_sub(pfragA->masscenter, pfragA->original->masscenter, moveA);
-    vector_sub(pfragB->masscenter, pfragB->original->masscenter, moveB);
-    vector_sub(moveA, moveB, moveAB);
-    for (i = 0; i < pfragA->original->std_ptr->n_pol_points; ++i) {
-      vector_zero(field);
-      ppi = pfragA->original->pol_ptr + i;
-      for (j = 0; j < pfragB->original->std_ptr->n_atoms; ++j) {
-        pmj = pfragB->original->mult_ptr + j;
-        vector_sub(ppi->position, pmj->position, dist);
-        vector_sum_inplace(dist, moveAB);
-        r = vector_len(dist);
-        r2 = r * r;
-        r3 = r2 * r;
+    for (j = 0; j < pfragB->original->std_ptr->n_mult_points; ++j) {
+      pmj = pfragB->original->mult_ptr + j;
+      vector_sub(ppi->position, pmj->position, dist);
+      vector_sum_inplace(dist, moveAB);
+      r = vector_len(dist);
+      r2 = r * r;
+      r3 = r2 * r;
+      r5 = r2 * r3;
+      r7 = r2 * r5;
 
-        damping = 1.0 - exp(-0.6 * r2) * (1.0 + 0.6 * r2);
+      damping = 1.0 - exp(-0.6 * r2) * (1.0 + 0.6 * r2);
 
-#if 0
-				field[0] += damping * (pmj->nuclear * dist[0] / r3);
-				field[1] += damping * (pmj->nuclear * dist[1] / r3);
-				field[2] += damping * (pmj->nuclear * dist[2] / r3);
-#else
-        vector_scalar_mul_sum_inplace(dist, damping * pmj->nuclear / r3, field);
-#endif
-      }
-      for (j = 0; j < pfragB->original->std_ptr->n_mult_points; ++j) {
-        pmj = pfragB->original->mult_ptr + j;
-        vector_sub(ppi->position, pmj->position, dist);
-        vector_sum_inplace(dist, moveAB);
-        r = vector_len(dist);
-        r2 = r * r;
-        r3 = r2 * r;
-        r5 = r2 * r3;
-        r7 = r2 * r5;
+      vector_zero(field_undamped);
 
-        damping = 1.0 - exp(-0.6 * r2) * (1.0 + 0.6 * r2);
+      dsum = vector_dot(pmj->dipole, dist);
+      qsum = quadrupole_sum(pmj->quadrupole, dist);
 
-#if 0
-				field[0] += damping * (pmj->monopole * dist[0] / r3);
-				field[1] += damping * (pmj->monopole * dist[1] / r3);
-				field[2] += damping * (pmj->monopole * dist[2] / r3);
-	
-				psum = vector_dot(pmj->dipole, dist);
-				field[0] += damping * (3.0 / r5 * psum * dist[0] - pmj->dipole[0] / r3);
-				field[1] += damping * (3.0 / r5 * psum * dist[1] - pmj->dipole[1] / r3);
-				field[2] += damping * (3.0 / r5 * psum * dist[2] - pmj->dipole[2] / r3);
+      vector_scalar_mul_sum_inplace(dist, pmj->monopole / r3, field_undamped);
 
-				psum = quadrupole_sum(pmj->quadrupole, dist);
-				field[0] += damping * (5.0 / r7 * psum * dist[0] -
-					2.0 / r5 * (pmj->quadrupole[0] * dist[0] + pmj->quadrupole[3] * dist[1] + pmj->quadrupole[4] * dist[2]));
-				field[1] += damping * (5.0 / r7 * psum * dist[1] -
-					2.0 / r5 * (pmj->quadrupole[3] * dist[0] + pmj->quadrupole[1] * dist[1] + pmj->quadrupole[5] * dist[2]));
-				field[2] += damping * (5.0 / r7 * psum * dist[2] -
-					2.0 / r5 * (pmj->quadrupole[4] * dist[0] + pmj->quadrupole[5] * dist[1] + pmj->quadrupole[2] * dist[2]));
-#else
-        vector_zero(field_undamped);
+      vector_scalar_mul_sum_inplace(dist, 3.0 / r5 * dsum, field_undamped);
+      vector_scalar_mul_sum_inplace(pmj->dipole, -1 / r3, field_undamped);
 
-        dsum = vector_dot(pmj->dipole, dist);
-        qsum = quadrupole_sum(pmj->quadrupole, dist);
+      tmpvec[0] = pmj->quadrupole[0] * dist[0] + pmj->quadrupole[3] * dist[1] +
+                  pmj->quadrupole[4] * dist[2];
+      tmpvec[1] = pmj->quadrupole[3] * dist[0] + pmj->quadrupole[1] * dist[1] +
+                  pmj->quadrupole[5] * dist[2];
+      tmpvec[2] = pmj->quadrupole[4] * dist[0] + pmj->quadrupole[5] * dist[1] +
+                  pmj->quadrupole[2] * dist[2];
+      vector_scalar_mul_sum_inplace(dist, 5.0 / r7 * qsum, field_undamped);
+      vector_scalar_mul_sum_inplace(tmpvec, -2.0 / r5, field_undamped);
 
-        vector_scalar_mul_sum_inplace(dist, pmj->monopole / r3, field_undamped);
-
-        vector_scalar_mul_sum_inplace(dist, 3.0 / r5 * dsum, field_undamped);
-        vector_scalar_mul_sum_inplace(pmj->dipole, -1 / r3, field_undamped);
-
-        tmpvec[0] = pmj->quadrupole[0] * dist[0] +
-                    pmj->quadrupole[3] * dist[1] + pmj->quadrupole[4] * dist[2];
-        tmpvec[1] = pmj->quadrupole[3] * dist[0] +
-                    pmj->quadrupole[1] * dist[1] + pmj->quadrupole[5] * dist[2];
-        tmpvec[2] = pmj->quadrupole[4] * dist[0] +
-                    pmj->quadrupole[5] * dist[1] + pmj->quadrupole[2] * dist[2];
-        vector_scalar_mul_sum_inplace(dist, 5.0 / r7 * qsum, field_undamped);
-        vector_scalar_mul_sum_inplace(tmpvec, -2.0 / r5, field_undamped);
-
-        vector_scalar_mul_sum_inplace(field_undamped, damping, field);
-#endif
-      }
-      vector_sum_inplace(pfragA->pol_status[i].field_immut, field);
+      vector_scalar_mul_sum_inplace(field_undamped, damping, field);
     }
+    vector_sum_inplace(pfragA->pol_status[i].field_immut, field);
   }
 }
 
-static void calc_induced_dipole_field(pol_fragment *pfragA, const cluster *pcls,
-                                      const size_t *iptr, size_t npol) {
+void calc_induced_dipole_field(pol_fragment *pfragA,
+                               const pol_fragment *pfragB) {
   double r, r2, r3, r5, psum, damping;
   const pol_point *ppi, *ppj;
-  const pol_fragment *pfragB;
   pol_point_status *ppstat;
   vector dist, field, moveA, moveB, moveAB;
-#if 0
-#else
   vector field_undamped;
-#endif
   size_t n, i, j;
 
+  vector_sub(pfragA->masscenter, pfragA->original->masscenter, moveA);
+  vector_sub(pfragB->masscenter, pfragB->original->masscenter, moveB);
+  vector_sub(moveA, moveB, moveAB);
   for (i = 0; i < pfragA->original->std_ptr->n_pol_points; ++i) {
-    vector_zero(pfragA->pol_status[i].field_induced);
-  }
+    vector_zero(field);
+    ppi = pfragA->original->pol_ptr + i;
+    for (j = 0; j < pfragB->original->std_ptr->n_pol_points; ++j) {
+      ppj = pfragB->original->pol_ptr + j;
+      ppstat = pfragB->pol_status + j;
+      vector_sub(ppi->position, ppj->position, dist);
+      vector_sum_inplace(dist, moveAB);
+      r = vector_len(dist);
+      r2 = r * r;
+      r3 = r2 * r;
+      r5 = r2 * r3;
 
-  for (n = 0; n < npol; ++n) {
-    pfragB = pcls->polfrag_ptr + iptr[n];
-    if (pfragA == pfragB)
-      continue;
-    vector_sub(pfragA->masscenter, pfragA->original->masscenter, moveA);
-    vector_sub(pfragB->masscenter, pfragB->original->masscenter, moveB);
-    vector_sub(moveA, moveB, moveAB);
-    for (i = 0; i < pfragA->original->std_ptr->n_pol_points; ++i) {
-      vector_zero(field);
-      ppi = pfragA->original->pol_ptr + i;
-      for (j = 0; j < pfragB->original->std_ptr->n_pol_points; ++j) {
-        ppj = pfragB->original->pol_ptr + j;
-        ppstat = pfragB->pol_status + j;
-        vector_sub(ppi->position, ppj->position, dist);
-        vector_sum_inplace(dist, moveAB);
-        r = vector_len(dist);
-        r2 = r * r;
-        r3 = r2 * r;
-        r5 = r2 * r3;
+      damping = 1.0 - exp(-0.6 * r2) * (1.0 + 0.6 * r2);
 
-        damping = 1.0 - exp(-0.6 * r2) * (1.0 + 0.6 * r2);
+      psum = vector_dot(ppstat->dipole, dist);
+      vector_zero(field_undamped);
+      vector_scalar_mul_sum_inplace(dist, 3.0 / r5 * psum, field_undamped);
+      vector_scalar_mul_sum_inplace(ppstat->dipole, -1 / r3, field_undamped);
 
-        psum = vector_dot(ppstat->dipole, dist);
-#if 0
-				field[0] += damping * (3.0 / r5 * psum * dist[0] - ppstat->dipole[0] / r3);
-				field[1] += damping * (3.0 / r5 * psum * dist[1] - ppstat->dipole[1] / r3);
-				field[2] += damping * (3.0 / r5 * psum * dist[2] - ppstat->dipole[2] / r3);
-#else
-        vector_zero(field_undamped);
-        vector_scalar_mul_sum_inplace(dist, 3.0 / r5 * psum, field_undamped);
-        vector_scalar_mul_sum_inplace(ppstat->dipole, -1 / r3, field_undamped);
-
-        vector_scalar_mul_sum_inplace(field_undamped, damping, field);
-#endif
-      }
-      vector_sum_inplace(pfragA->pol_status[i].field_induced, field);
+      vector_scalar_mul_sum_inplace(field_undamped, damping, field);
     }
+    vector_sum_inplace(pfragA->pol_status[i].field_induced, field);
   }
 }
 
-static double calc_induced_dipole(pol_fragment *pfrag, double mix) {
+double calc_induced_dipole(pol_fragment *pfrag, double mix) {
   size_t i;
   vector field, dipole, old_dipole;
   pol_point *ppi;
@@ -429,7 +382,7 @@ static double calc_induced_dipole(pol_fragment *pfrag, double mix) {
   return convergence;
 }
 
-static double calc_fragment_polarization_energy(const pol_fragment *pfrag) {
+double calc_fragment_polarization_energy(const pol_fragment *pfrag) {
   double energy = 0.0;
   size_t i;
   pol_point_status *ppstat;
@@ -441,85 +394,14 @@ static double calc_fragment_polarization_energy(const pol_fragment *pfrag) {
   return energy;
 }
 
-static double calc_2body_electrostatic_energy(const pol_fragment *pfragA,
-                                              const pol_fragment *pfragB) {
+double calc_2body_electrostatic_energy(const pol_fragment *pfragA,
+                                       const pol_fragment *pfragB) {
   double energy = 0.0;
-  size_t i, j;
 
   energy += calc_nuclear_nuclear_energy(pfragA, pfragB);
   energy += calc_nuclear_multipole_energy(pfragA, pfragB);
   energy += calc_nuclear_multipole_energy(pfragB, pfragA);
   energy += calc_multipole_multipole_energy(pfragA, pfragB);
 
-  return energy;
-}
-
-double calc_electrostatic_energy(const cluster *pcls, double radius) {
-  double energy = 0.0;
-  size_t i, npol = 0, npoint = 0;
-
-  size_t *iptr = galloc(sizeof(size_t) * pcls->n_polfrags);
-
-  for (i = 0; i < pcls->n_polfrags; ++i) {
-    if (vector_len(pcls->polfrag_ptr[i].masscenter) < radius) {
-      iptr[npol++] = i;
-    }
-  }
-
-#pragma omp parallel for schedule(dynamic) reduction(+ : energy)
-  for (size_t i = 0; i < npol; ++i) {
-    for (size_t j = iptr[i] + 1; j < pcls->n_polfrags; ++j) {
-      energy += calc_2body_electrostatic_energy(pcls->polfrag_ptr + iptr[i],
-                                                pcls->polfrag_ptr + j);
-    }
-  }
-
-  free(iptr);
-  return energy;
-}
-
-double calc_polarization_energy(const cluster *pcls, double radius) {
-  double energy = 0.0, convergence, mix;
-  size_t i, niter, npol = 0, npoint = 0;
-
-  size_t *iptr = galloc(sizeof(size_t) * pcls->n_polfrags);
-
-  for (i = 0; i < pcls->n_polfrags; ++i) {
-    if (vector_len(pcls->polfrag_ptr[i].masscenter) < radius) {
-      iptr[npol++] = i;
-      npoint += pcls->polfrag_ptr[i].original->std_ptr->n_pol_points;
-    }
-  }
-
-#pragma omp parallel for schedule(dynamic)
-  for (i = 0; i < npol; ++i) {
-    calc_mult_field(pcls->polfrag_ptr + iptr[i], pcls);
-  }
-
-  for (niter = 1; niter <= 200; ++niter) {
-    convergence = 0.0;
-    mix = (niter > 3) ? 0.50 : 0.90 - niter * 0.1;
-#pragma omp parallel for schedule(dynamic)
-    for (i = 0; i < npol; ++i) {
-      calc_induced_dipole_field(pcls->polfrag_ptr + iptr[i], pcls, iptr, npol);
-    }
-#pragma omp parallel for schedule(dynamic) reduction(+ : convergence)
-    for (i = 0; i < npol; ++i) {
-      convergence += calc_induced_dipole(pcls->polfrag_ptr + iptr[i], mix);
-    }
-    convergence = sqrt(convergence / npoint);
-    fprintf(stdout, "Iteration %3zu: RMS Dipole = %15.9f\n", niter,
-            convergence);
-    if (convergence < 1.0e-07) {
-      break;
-    }
-  }
-
-#pragma omp parallel for schedule(dynamic) reduction(+ : energy)
-  for (i = 0; i < npol; ++i) {
-    energy += calc_fragment_polarization_energy(pcls->polfrag_ptr + iptr[i]);
-  }
-
-  free(iptr);
   return energy;
 }

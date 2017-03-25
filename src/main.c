@@ -1,12 +1,13 @@
 #include <omp.h>
 
-#include "core.h"
-#include "fragments.h"
+#include "calc.h"
+#include "cluster.h"
+#include "elec.h"
 #include "utils.h"
 
 static void useage(void) {
-  fprintf(stderr, "clacpol [input] [center] [full_radius] [pol_radius][charge] "
-                  "[nthread]\n");
+  fprintf(stderr,
+          "clacpol [input] [center] [full_radius] [pol_radius] [nthread]\n");
 }
 
 int main(int argc, char *argv[]) {
@@ -14,18 +15,17 @@ int main(int argc, char *argv[]) {
   cluster cls;
   size_t i, j, center_index;
   double r_full, r_pol, e_elec, e_pol, total = 0.0;
-  int charge, nthreads;
+  int nthreads;
   char filename[1024];
 
-  if (argc == 7 && sscanf(argv[1], "%s", filename) &&
+  if (argc == 6 && sscanf(argv[1], "%s", filename) &&
       sscanf(argv[2], "%zd", &center_index) &&
       sscanf(argv[3], "%lf", &r_full) && sscanf(argv[4], "%lf", &r_pol) &&
-      sscanf(argv[5], "%d", &charge) && sscanf(argv[6], "%d", &nthreads)) {
+      sscanf(argv[5], "%d", &nthreads)) {
     fprintf(stdout, "Input File: %s\n", filename);
     fprintf(stdout, "Central Molecular Index: %lu\n", center_index);
     fprintf(stdout, "Cluster Radius: %.5lf Angstrom\n", r_full);
     fprintf(stdout, "Polarizable Radius: %.5lf Angstrom\n", r_pol);
-    fprintf(stdout, "Central Molecular Charge: %d\n", charge);
     fprintf(stdout, "Number of Threads: %d\n", nthreads);
   } else {
     useage();
@@ -36,6 +36,7 @@ int main(int argc, char *argv[]) {
 
   omp_set_num_threads(nthreads);
 
+#if 0
   fprintf(stdout, "\n******************************\n\n");
   fragment_load(fopen(filename, "r"), &sys);
   fprintf(stdout, "There are %lu molecules in this box.\n", sys.n_frag);
@@ -62,4 +63,40 @@ int main(int argc, char *argv[]) {
   fprintf(stdout, "Polarization  Energy: %15.9f Ha\n", e_pol);
   fprintf(stdout, "Total         Energy: %15.9f Ha\n", total);
   return 0;
+#else
+  fprintf(stdout, "\n******************************\n\n");
+  fragment_load(fopen(filename, "r"), &sys);
+  fprintf(stdout, "There are %lu molecules in this box.\n", sys.n_frag);
+  gen_cluster(&cls, &sys, r_full * BOHR, 0);
+  fprintf(stdout, "Generate a cluster with center at origin and radius equal "
+                  "to %.5lf angstrom.\n",
+          r_full);
+  set_polarizable_include(&cls, r_pol * BOHR);
+  fprintf(stdout, "There are %lu(%lu polarizable) molecules in this cluster.\n",
+          cls.n_polfrags, cls.n_include);
+  fprintf(stdout, "\n******************************\n\n");
+  double cation = 0.0, anion = 0.0;
+  alloc_pol_mem(&cls);
+  calc_ionization_energy(&cls, &cation, &anion);
+  fprintf(stdout, "\n******************************\n\n");
+  fprintf(stdout, "Cation Ionization Energy: %15.9f Ha\n", cation);
+  fprintf(stdout, "Anion  Ionization Energy: %15.9f Ha\n", anion);
+#if 0
+  modify_center_charge(&cls, charge);
+  fprintf(stdout, "Set the charge of the central molecule to %+d.\n", charge);
+
+  fprintf(stdout, "\n******************************\n\n");
+  set_polarizable_include(&cls, r_pol * BOHR);
+  e_elec = calc_electrostatic_energy(&cls);
+  fprintf(stdout, "Electrostatic Energy: %15.9f Ha\n", e_elec);
+  alloc_pol_mem(&cls);
+  fprintf(stdout, "Iterative Polarizaion:\n");
+  e_pol = calc_polarization_energy(&cls);
+  total = e_elec + e_pol;
+  fprintf(stdout, "Electrostatic Energy: %15.9f Ha\n", e_elec);
+  fprintf(stdout, "Polarization  Energy: %15.9f Ha\n", e_pol);
+  fprintf(stdout, "Total         Energy: %15.9f Ha\n", total);
+#endif
+  return 0;
+#endif
 }

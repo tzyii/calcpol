@@ -1,11 +1,12 @@
-#include "efp.h"
-#include "matvec.h"
-#include "types.h"
-#include "utils.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "efp.h"
+#include "matvec.h"
+#include "types.h"
+#include "utils.h"
 
 static list_ptr pefp = NULL;
 static list_ptr pmult = NULL;
