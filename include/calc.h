@@ -9,5 +9,7 @@ extern double calc_polarization_energy(const cluster *pcls);
 
 extern void calc_ionization_energy(cluster *pcls, double *cation, double *anion);
 
+extern double calc_reorganization_energy(cluster *pclsA, cluster *pclsB, int charge);
+
 #endif
 

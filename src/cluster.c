@@ -455,7 +455,6 @@ void gen_cluster(cluster *cls, const box *pbox, double radius,
 
   cls->center = 0;
   cls->n_polfrags = 0;
-  cls->n_polpoints = 0;
   cls->n_include = 0;
   cls->include_ptr = NULL;
 
@@ -483,7 +482,6 @@ void gen_cluster(cluster *cls, const box *pbox, double radius,
             cls->center = cls->n_polfrags;
           }
           cls->n_polfrags += 1;
-          cls->n_polpoints += ptr->original->std_ptr->n_pol_points;
         }
         if (r_min > r) {
           r_min = r;
