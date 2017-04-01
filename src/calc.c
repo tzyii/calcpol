@@ -442,7 +442,7 @@ double calc_reorganization_energy(cluster *pclsA, cluster *pclsB, int charge) {
     }
   }
 
-  fprintf(stdout, "Set the central molecule of cluster A to be charged(%d) and "
+  fprintf(stdout, "Set the central molecule of cluster A to be charged(%+d) and "
                   "initailize all polarization status.\n",
           charge);
   modify_center_charge(pclsA, charge);
@@ -473,7 +473,7 @@ double calc_reorganization_energy(cluster *pclsA, cluster *pclsB, int charge) {
   list_polarize_scf(inc_ptr, ninc);
 
   fprintf(stdout, "Set the central molecules of cluster A and B to be neutral "
-                  "and charged(%d) respectively.\n",
+                  "and charged(%+d) respectively.\n",
           charge);
   modify_center_charge(pclsA, 0);
   modify_center_charge(pclsB, charge);
