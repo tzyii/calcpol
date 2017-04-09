@@ -343,7 +343,7 @@ double calc_reorganization_energy(cluster *pclsA, cluster *pclsB, int charge) {
   size_t m, n, npol = 0, ninc = 0, centers[2];
   size_t *inc_idx_ptr;
   bool found = false;
-  pol_fragment **pol_ptr, **inc_ptr, *pfragA, *pfragB;
+  pol_fragment **pol_ptr, **inc_ptr, *cent_ptr[2], *pfragA, *pfragB;
   vector **pfield;
 
   pol_ptr =
@@ -402,6 +402,8 @@ double calc_reorganization_energy(cluster *pclsA, cluster *pclsB, int charge) {
       pol_ptr[npol++] = pfragB;
     }
   }
+  cent_ptr[0] = pol_ptr[centers[0]];
+  cent_ptr[1] = pol_ptr[centers[1]];
   fprintf(stdout,
           "There are %lu(%lu polarizable) molecules in merged cluster.\n", npol,
           ninc);
@@ -442,8 +444,9 @@ double calc_reorganization_energy(cluster *pclsA, cluster *pclsB, int charge) {
     }
   }
 
-  fprintf(stdout, "Set the central molecule of cluster A to be charged(%+d) and "
-                  "initailize all polarization status.\n",
+  fprintf(stdout,
+          "Set the central molecule of cluster A to be charged(%+d) and "
+          "initailize all polarization status.\n",
           charge);
   modify_center_charge(pclsA, charge);
   init_pol_mem(pclsA);
@@ -477,10 +480,14 @@ double calc_reorganization_energy(cluster *pclsA, cluster *pclsB, int charge) {
           charge);
   modify_center_charge(pclsA, 0);
   modify_center_charge(pclsB, charge);
+  init_field_induced(pclsA);
+  init_field_induced(pclsB);
 
-  fprintf(stdout,
-          "Renew field exerted by permannent multipoles of central "
-          "molecules and calculate polarization energy <pol_s2_s1>...\n");
+  fprintf(
+      stdout,
+      "Renew field exerted by permannent multipoles of central molecules...\n");
+  fprintf(stdout, "(Treat induced dipole of surrounding molecules as "
+                  "permannent for central molecules)\n");
 #pragma omp parallel for schedule(dynamic) reduction(+ : pol_a)
   for (size_t inc_idx = 0; inc_idx < ninc; ++inc_idx) {
     for (size_t idx = 0;
@@ -488,18 +495,56 @@ double calc_reorganization_energy(cluster *pclsA, cluster *pclsB, int charge) {
       vector_dup(pfield[inc_idx][idx],
                  inc_ptr[inc_idx]->pol_status[idx].field_immut);
     }
-    if (inc_idx_ptr[inc_idx] == centers[0]) {
-      calc_mult_field(inc_ptr[inc_idx], pol_ptr[centers[1]]);
-    } else if (inc_idx_ptr[inc_idx] == centers[1]) {
+    if (inc_idx_ptr[inc_idx] != centers[0] &&
+        inc_idx_ptr[inc_idx] != centers[1]) {
       calc_mult_field(inc_ptr[inc_idx], pol_ptr[centers[0]]);
+      calc_mult_field(inc_ptr[inc_idx], pol_ptr[centers[1]]);
+      pol_a += calc_fragment_polarization_energy(inc_ptr[inc_idx]);
     } else {
-      calc_mult_field(inc_ptr[inc_idx], pol_ptr[centers[0]]);
-      calc_mult_field(inc_ptr[inc_idx], pol_ptr[centers[1]]);
+      if (inc_idx_ptr[inc_idx] == centers[0]) {
+        calc_mult_field(inc_ptr[inc_idx], pol_ptr[centers[1]]);
+      } else {
+        calc_mult_field(inc_ptr[inc_idx], pol_ptr[centers[0]]);
+      }
+      for (size_t idx = 0; idx < ninc; ++idx) {
+        if (inc_idx_ptr[idx] == centers[0] || inc_idx_ptr[idx] == centers[1]) {
+          continue;
+        } else {
+          calc_induced_dipole_field(inc_ptr[inc_idx], inc_ptr[idx]);
+        }
+      }
+      add_induced_field(inc_ptr[inc_idx]);
     }
-    pol_a += calc_fragment_polarization_energy(inc_ptr[inc_idx]);
   }
 
-  fprintf(stdout, "Initialize induced dipoles.\n");
+  fprintf(stdout, "Initialize induced dipoles of central molecules.\n");
+  zero_induced_dipole(pol_ptr[centers[0]]);
+  zero_induced_dipole(pol_ptr[centers[1]]);
+
+  fprintf(stdout, "Calculate induced dipoles of central molecules...\n");
+  list_polarize_scf(cent_ptr, 2);
+
+  for (size_t inc_idx = 0; inc_idx < ninc; ++inc_idx) {
+    if (inc_idx_ptr[inc_idx] != centers[0] &&
+        inc_idx_ptr[inc_idx] != centers[1]) {
+      continue;
+    }
+    for (size_t idx = 0;
+         idx < inc_ptr[inc_idx]->original->std_ptr->n_pol_points; ++idx) {
+      vector_dup(pfield[inc_idx][idx],
+                 inc_ptr[inc_idx]->pol_status[idx].field_immut);
+    }
+    if (inc_idx_ptr[inc_idx] == centers[0]) {
+      calc_mult_field(inc_ptr[inc_idx], pol_ptr[centers[1]]);
+    } else {
+      calc_mult_field(inc_ptr[inc_idx], pol_ptr[centers[0]]);
+    }
+  }
+
+  fprintf(stdout, "Calculate polarization energy <pol_s2_s2>...\n");
+  pol_a += calc_fragment_polarization_energy(pol_ptr[centers[0]]) +
+           calc_fragment_polarization_energy(pol_ptr[centers[1]]);
+
   init_dipole_induced(pclsA);
   init_dipole_induced(pclsB);
 
