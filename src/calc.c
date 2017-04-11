@@ -336,11 +336,6 @@ static void list_polarize_scf(pol_fragment **inc_ptr, size_t ninc) {
       break;
     }
   }
-    /*for (size_t m = 0; m < ninc; ++m) {
-      for (size_t n = 0; n < inc_ptr[m]->original->std_ptr->n_pol_points; ++n) {
-        fprintf(stdout, "%9.5f %9.5f %9.5f\n", inc_ptr[m]->pol_status[n].field_induced[0], inc_ptr[m]->pol_status[n].field_induced[1], inc_ptr[m]->pol_status[n].field_induced[2]);
-      }
-    }*/
 }
 
 double calc_reorganization_energy(cluster *pclsA, cluster *pclsB, int charge) {
@@ -523,12 +518,13 @@ double calc_reorganization_energy(cluster *pclsA, cluster *pclsB, int charge) {
   }
 
   fprintf(stdout, "Initialize induced dipoles of central molecules.\n");
-  //zero_induced_dipole(pol_ptr[centers[0]]);
-  //zero_induced_dipole(pol_ptr[centers[1]]);
+  zero_induced_dipole(pol_ptr[centers[0]]);
+  zero_induced_dipole(pol_ptr[centers[1]]);
 
   fprintf(stdout, "Calculate induced dipoles of central molecules...\n");
-  //list_polarize_scf(cent_ptr, 2);
+  list_polarize_scf(cent_ptr, 2);
 
+  fprintf(stdout, "Calculate polarization energy <pol_s2_s1>...\n");
 #pragma omp parallel for schedule(dynamic)
   for (size_t inc_idx = 0; inc_idx < ninc; ++inc_idx) {
     zero_induced_field(inc_ptr[inc_idx]);
@@ -554,11 +550,6 @@ double calc_reorganization_energy(cluster *pclsA, cluster *pclsB, int charge) {
     pol_a += calc_fragment_polarization_energy(inc_ptr[inc_idx]);
   }
 
-  fprintf(stdout, "Calculate polarization energy <pol_s2_s1>...\n");
-
-  pol_a += calc_fragment_polarization_energy(pol_ptr[centers[0]]) +
-           calc_fragment_polarization_energy(pol_ptr[centers[1]]);
-
   init_dipole_induced(pclsA);
   init_dipole_induced(pclsB);
 
@@ -571,7 +562,6 @@ double calc_reorganization_energy(cluster *pclsA, cluster *pclsB, int charge) {
     pol_b += calc_fragment_polarization_energy(inc_ptr[inc_idx]);
   }
 
-fprintf(stdout, "pol: %12.9f %12.9f\n", pol_a, pol_b);
   modify_center_charge(pclsA, 0);
   modify_center_charge(pclsB, 0);
   init_pol_mem(pclsA);

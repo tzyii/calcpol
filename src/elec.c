@@ -424,20 +424,6 @@ double calc_fragment_polarization_energy(const pol_fragment *pfrag) {
   return energy;
 }
 
-double calc_fragment_polarization_energy2(const pol_fragment *pfrag) {
-  double energy = 0.0;
-  vector field;
-  size_t i;
-  pol_point_status *ppstat;
-
-  for (i = 0; i < pfrag->original->std_ptr->n_pol_points; ++i) {
-    ppstat = pfrag->pol_status + i;
-    vector_sum(ppstat->field_immut, ppstat->field_induced, field);
-    energy -= vector_dot(ppstat->dipole, ppstat->field_immut);
-  }
-  return energy;
-}
-
 double calc_2body_electrostatic_energy(const pol_fragment *pfragA,
                                        const pol_fragment *pfragB) {
   double energy = 0.0;

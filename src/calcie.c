@@ -61,9 +61,13 @@ int main(int argc, char *argv[]) {
           cls.n_polfrags, cls.n_include);
   fprintf(stdout, "\n******************************\n\n");
   alloc_pol_mem(&cls);
-  calc_ionization_energy(&cls, &cation, &anion);
+  calc_ionization_energy(&cls, pcation, panion);
   fprintf(stdout, "\n******************************\n\n");
-  fprintf(stdout, "Cation Ionization Energy: %15.9f Ha\n", cation);
-  fprintf(stdout, "Anion  Ionization Energy: %15.9f Ha\n", anion);
+  if (pcation != NULL) {
+    fprintf(stdout, "Cation Ionization Energy: %15.9f Ha\n", cation);
+  }
+  if (panion != NULL) {
+    fprintf(stdout, "Anion  Ionization Energy: %15.9f Ha\n", anion);
+  }
   return 0;
 }

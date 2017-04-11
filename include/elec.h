@@ -17,7 +17,8 @@ extern void init_field_immut(cluster *pcls);
 
 extern void calc_mult_field(pol_fragment *pfragA, const pol_fragment *pfragB);
 
-extern void calc_induced_dipole_field(pol_fragment *pfragA, const pol_fragment *pfragB);
+extern void calc_induced_dipole_field(pol_fragment *pfragA,
+                                      const pol_fragment *pfragB);
 
 extern double calc_induced_dipole(pol_fragment *pfrag, double mix);
 
@@ -29,8 +30,7 @@ extern void zero_induced_field(pol_fragment *pfrag);
 
 extern double calc_fragment_polarization_energy(const pol_fragment *pfrag);
 
-extern double calc_fragment_polarization_energy2(const pol_fragment *pfrag);
-
-extern double calc_2body_electrostatic_energy(const pol_fragment *pfragA, const pol_fragment *pfragB);
+extern double calc_2body_electrostatic_energy(const pol_fragment *pfragA,
+                                              const pol_fragment *pfragB);
 
 #endif
