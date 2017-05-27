@@ -490,7 +490,7 @@ double calc_2body_electrostatic_energy_detail(const pol_fragment *pfragA,
     for (j = 0; j < pfragA->original->std_ptr->n_mult_points; ++j) {
       pmj = pfragA->original->mult_ptr + j;
       vector_sub(pmj->position, pmi->position, dist);
-      vector_sum_inplace(dist, moveAB);
+      vector_sub_inplace(dist, moveAB);
       r = vector_len(dist);
       r2 = r * r;
       r3 = r2 * r;
