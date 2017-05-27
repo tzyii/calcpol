@@ -79,4 +79,19 @@ typedef struct {
   pol_fragment *polfrag_ptr;
 } cluster;
 
+typedef struct {
+  double nn;
+  double nm;
+  double nd;
+  double nq;
+  double no;
+  double mm;
+  double md;
+  double mq;
+  double mo;
+  double dd;
+  double dq;
+  double qq;
+} detailed_energy;
+
 #endif

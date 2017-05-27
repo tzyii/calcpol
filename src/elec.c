@@ -435,3 +435,130 @@ double calc_2body_electrostatic_energy(const pol_fragment *pfragA,
 
   return energy;
 }
+
+double calc_2body_electrostatic_energy_detail(const pol_fragment *pfragA,
+                                              const pol_fragment *pfragB,
+                                              detailed_energy *p_detail) {
+  double energy = 0.0, damping, si, sj, r, r2, r3, r5, r7, r9;
+  double dsumi, dsumj, qsumi, qsumj, osumi, osumj;
+  const mult_point *pmi, *pmj;
+  vector dist, dist_opposite, moveA, moveB, moveAB;
+  size_t i, j;
+  memset(p_detail, 0, sizeof(detailed_energy));
+
+  vector_sub(pfragA->masscenter, pfragA->original->masscenter, moveA);
+  vector_sub(pfragB->masscenter, pfragB->original->masscenter, moveB);
+  vector_sub(moveB, moveA, moveAB);
+
+  for (i = 0; i < pfragA->original->std_ptr->n_atoms; ++i) {
+    pmi = pfragA->original->mult_ptr + i;
+    for (j = 0; j < pfragB->original->std_ptr->n_atoms; ++j) {
+      pmj = pfragB->original->mult_ptr + j;
+      vector_sub(pmj->position, pmi->position, dist);
+      vector_sum_inplace(dist, moveAB);
+      r = vector_len(dist);
+
+      damping = calc_nuclear_screen_damping(pmj->screen, r);
+      p_detail->nn += pmi->nuclear * pmj->nuclear / r;
+    }
+  }
+
+  for (i = 0; i < pfragA->original->std_ptr->n_atoms; ++i) {
+    pmi = pfragA->original->mult_ptr + i;
+    for (j = 0; j < pfragB->original->std_ptr->n_mult_points; ++j) {
+      pmj = pfragB->original->mult_ptr + j;
+      vector_sub(pmj->position, pmi->position, dist);
+      vector_sum_inplace(dist, moveAB);
+      r = vector_len(dist);
+      r2 = r * r;
+      r3 = r2 * r;
+      r5 = r2 * r3;
+      r7 = r2 * r5;
+      dsumj = vector_dot(pmj->dipole, dist);
+      qsumj = quadrupole_sum(pmj->quadrupole, dist);
+      osumj = octupole_sum(pmj->octupole, dist);
+      damping = calc_nuclear_screen_damping(pmj->screen, r);
+      p_detail->nm += damping * pmi->nuclear * pmj->monopole / r;
+      p_detail->nd -= pmi->nuclear / r3 * dsumj;
+      p_detail->nq += pmi->nuclear / r5 * qsumj;
+      p_detail->no -= pmi->nuclear / r7 * osumj;
+    }
+  }
+
+  for (i = 0; i < pfragB->original->std_ptr->n_atoms; ++i) {
+    pmi = pfragB->original->mult_ptr + i;
+    for (j = 0; j < pfragA->original->std_ptr->n_mult_points; ++j) {
+      pmj = pfragA->original->mult_ptr + j;
+      vector_sub(pmj->position, pmi->position, dist);
+      vector_sum_inplace(dist, moveAB);
+      r = vector_len(dist);
+      r2 = r * r;
+      r3 = r2 * r;
+      r5 = r2 * r3;
+      r7 = r2 * r5;
+      dsumj = vector_dot(pmj->dipole, dist);
+      qsumj = quadrupole_sum(pmj->quadrupole, dist);
+      osumj = octupole_sum(pmj->octupole, dist);
+      damping = calc_nuclear_screen_damping(pmj->screen, r);
+      p_detail->nm += damping * pmi->nuclear * pmj->monopole / r;
+      p_detail->nd -= pmi->nuclear / r3 * dsumj;
+      p_detail->nq += pmi->nuclear / r5 * qsumj;
+      p_detail->no -= pmi->nuclear / r7 * osumj;
+    }
+  }
+
+  for (i = 0; i < pfragA->original->std_ptr->n_mult_points; ++i) {
+    pmi = pfragA->original->mult_ptr + i;
+    for (j = 0; j < pfragB->original->std_ptr->n_mult_points; ++j) {
+      pmj = pfragB->original->mult_ptr + j;
+      vector_sub(pmj->position, pmi->position, dist);
+      vector_sum_inplace(dist, moveAB);
+      vector_scalar_mul(dist, -1.0, dist_opposite);
+      r = vector_len(dist);
+      r2 = r * r;
+      r3 = r2 * r;
+      r5 = r2 * r3;
+      r7 = r2 * r5;
+      r9 = r2 * r7;
+
+      dsumi = vector_dot(pmi->dipole, dist_opposite);
+      dsumj = vector_dot(pmj->dipole, dist);
+      qsumi = quadrupole_sum(pmi->quadrupole, dist_opposite);
+      qsumj = quadrupole_sum(pmj->quadrupole, dist);
+      osumi = octupole_sum(pmi->octupole, dist_opposite);
+      osumj = octupole_sum(pmj->octupole, dist);
+
+      damping = calc_screen_damping(pmj->screen, pmi->screen, r);
+      p_detail->mm += damping * (pmi->monopole) * (pmj->monopole) / r;
+
+      p_detail->md -= (pmi->monopole) / r3 * dsumj;
+      p_detail->mq += (pmi->monopole) / r5 * qsumj;
+      p_detail->mo -= (pmi->monopole) / r7 * osumj;
+      p_detail->md -= (pmj->monopole) / r3 * dsumi;
+      p_detail->mq += (pmj->monopole) / r5 * qsumi;
+      p_detail->mo -= (pmj->monopole) / r7 * osumi;
+
+      p_detail->dd +=
+          vector_dot(pmi->dipole, pmj->dipole) / r3 + 3.0 * dsumi * dsumj / r5;
+
+      p_detail->dq +=
+          -5.0 / r7 * dsumi * qsumj -
+          2.0 / r5 * dipole_quadrupole_sum(pmi->dipole, pmj->quadrupole, dist);
+      p_detail->dq +=
+          -5.0 / r7 * dsumj * qsumi -
+          2.0 / r5 * dipole_quadrupole_sum(pmj->dipole, pmi->quadrupole,
+                                           dist_opposite);
+
+      p_detail->qq += (2.0 / r5 * quadrupole_quadrupole_dot(pmi->quadrupole,
+                                                            pmj->quadrupole) -
+                       20.0 / r7 * quadrupole_quadrupole_sum(
+                                       pmi->quadrupole, pmj->quadrupole, dist) +
+                       35.0 / r9 * qsumi * qsumj) /
+                      3.0;
+    }
+  }
+  energy = p_detail->nn + p_detail->nm + p_detail->nd + p_detail->nq +
+           p_detail->no + p_detail->mm + p_detail->md + p_detail->mq +
+           p_detail->mo + p_detail->dd + p_detail->dq + p_detail->qq;
+  return energy;
+}

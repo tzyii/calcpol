@@ -33,4 +33,8 @@ extern double calc_fragment_polarization_energy(const pol_fragment *pfrag);
 extern double calc_2body_electrostatic_energy(const pol_fragment *pfragA,
                                               const pol_fragment *pfragB);
 
+extern double calc_2body_electrostatic_energy_detail(const pol_fragment *pfragA,
+                                              const pol_fragment *pfragB,
+detailed_energy *p_detail);
+
 #endif
