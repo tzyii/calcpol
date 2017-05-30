@@ -442,7 +442,7 @@ void calc_ionization_energy(cluster *pcls, double *cation, double *anion) {
   pfield = NULL;
 
   if (cation != NULL) {
-    *cation = elec_n + pol_n - elec_c - pol_c;
+    *cation = elec_c + pol_c - elec_n - pol_n;
   }
 
   if (anion != NULL) {
