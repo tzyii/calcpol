@@ -64,10 +64,10 @@ int main(int argc, char *argv[]) {
   calc_ionization_energy(&cls, pcation, panion);
   fprintf(stdout, "\n******************************\n\n");
   if (pcation != NULL) {
-    fprintf(stdout, "Cation Ionization Energy: %15.9f Ha\n", cation);
+    fprintf(stdout, "IP[E(+) - E(0)]: % 25.12f Ha\n", cation);
   }
   if (panion != NULL) {
-    fprintf(stdout, "Anion  Ionization Energy: %15.9f Ha\n", anion);
+    fprintf(stdout, "EA[E(0) - E(-)]: % 25.12f Ha\n", anion);
   }
   return 0;
 }
