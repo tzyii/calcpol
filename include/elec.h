@@ -28,7 +28,7 @@ extern void zero_induced_dipole(pol_fragment *pfrag);
 
 extern void zero_induced_field(pol_fragment *pfrag);
 
-extern double calc_fragment_polarization_energy(const pol_fragment *pfrag);
+extern double calc_fragment_induction_energy(const pol_fragment *pfrag);
 
 extern double calc_2body_electrostatic_energy(const pol_fragment *pfragA,
                                               const pol_fragment *pfragB);

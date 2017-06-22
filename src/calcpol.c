@@ -6,7 +6,7 @@
 #include "utils.h"
 
 static void useage(void) {
-  fprintf(stderr, "clacie [input] [charge] [center] [full_radius] [pol_radius] "
+  fprintf(stderr, "clacpol [input] [charge] [center] [full_radius] [pol_radius] "
                   "[nthread]\n");
 }
 
@@ -61,13 +61,13 @@ int main(int argc, char *argv[]) {
           cls.n_polfrags, cls.n_include);
   fprintf(stdout, "\n******************************\n\n");
   alloc_pol_mem(&cls);
-  calc_ionization_energy(&cls, pcation, panion);
+  calc_polarization_energy(&cls, pcation, panion);
   fprintf(stdout, "\n******************************\n\n");
   if (pcation != NULL) {
-    fprintf(stdout, "IP[E(+) - E(0)]: % 25.12f Ha\n", cation);
+    fprintf(stdout, "P[+]: % 25.12f Ha\n", cation);
   }
   if (panion != NULL) {
-    fprintf(stdout, "EA[E(0) - E(-)]: % 25.12f Ha\n", anion);
+    fprintf(stdout, "P[-]: % 25.12f Ha\n", anion);
   }
   return 0;
 }

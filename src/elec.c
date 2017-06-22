@@ -412,7 +412,7 @@ void zero_induced_field(pol_fragment *pfrag) {
   }
 }
 
-double calc_fragment_polarization_energy(const pol_fragment *pfrag) {
+double calc_fragment_induction_energy(const pol_fragment *pfrag) {
   double energy = 0.0;
   size_t i;
   pol_point_status *ppstat;

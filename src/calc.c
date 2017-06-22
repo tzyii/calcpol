@@ -96,7 +96,7 @@ static void polarize_scf(cluster *pcls) {
   }
 }
 
-double calc_polarization_energy(cluster *pcls) {
+double calc_induction_energy(cluster *pcls) {
   double energy = 0.0, convergence, mix;
 
   init_pol_mem(pcls);
@@ -116,14 +116,14 @@ double calc_polarization_energy(cluster *pcls) {
 
 #pragma omp parallel for schedule(dynamic) reduction(+ : energy)
   for (size_t i = 0; i < pcls->n_include; ++i) {
-    energy += calc_fragment_polarization_energy(pcls->polfrag_ptr +
+    energy += calc_fragment_induction_energy(pcls->polfrag_ptr +
                                                 pcls->include_ptr[i]);
   }
 
   return energy;
 }
 
-void calc_ionization_energy(cluster *pcls, double *cation, double *anion) {
+void calc_polarization_energy(cluster *pcls, double *cation, double *anion) {
   double nn_n = 0.0, nm_n = 0.0, nd_n = 0.0, nq_n = 0.0, no_n = 0.0;
   double mm_n = 0.0, md_n = 0.0, mq_n = 0.0, mo_n = 0.0, dd_n = 0.0;
   double dq_n = 0.0, qq_n = 0.0;
@@ -263,13 +263,13 @@ void calc_ionization_energy(cluster *pcls, double *cation, double *anion) {
   fprintf(stdout, "Calculate induced dipoles...\n");
   polarize_scf(pcls);
 
-  fprintf(stdout, "Calculate polarization energy <pol_n>...\n");
+  fprintf(stdout, "Calculate induction energy <pol_n>...\n");
 #pragma omp parallel for schedule(dynamic) reduction(+ : pol_n)
   for (size_t i = 0; i < pcls->n_include; ++i) {
-    pol_n += calc_fragment_polarization_energy(pcls->polfrag_ptr +
+    pol_n += calc_fragment_induction_energy(pcls->polfrag_ptr +
                                                pcls->include_ptr[i]);
   }
-  fprintf(stdout, "Total polarization energy(cluster): % 25.12f Ha\n", pol_n);
+  fprintf(stdout, "Total induction energy(cluster): % 25.12f Ha\n", pol_n);
 
   if (cation != NULL) {
     fprintf(stdout,
@@ -340,17 +340,17 @@ void calc_ionization_energy(cluster *pcls, double *cation, double *anion) {
     fprintf(stdout, "Calculate induced dipoles...\n");
     polarize_scf(pcls);
 
-    fprintf(stdout, "Calculate polarization energy <pol_c>...\n");
+    fprintf(stdout, "Calculate induction energy <pol_c>...\n");
 #pragma omp parallel for schedule(dynamic) reduction(+ : pol_c)
     for (size_t i = 0; i < pcls->n_include; ++i) {
-      pol_c += calc_fragment_polarization_energy(pcls->polfrag_ptr +
+      pol_c += calc_fragment_induction_energy(pcls->polfrag_ptr +
                                                  pcls->include_ptr[i]);
     }
-    fprintf(stdout, "Total polarization energy(cluster): % 25.12f Ha\n", pol_c);
-    fprintf(stdout, "Total energy change: % 25.12f Ha\n"
+    fprintf(stdout, "Total induction energy(cluster): % 25.12f Ha\n", pol_c);
+    fprintf(stdout, "Polarization energy of cation: % 25.12f Ha\n"
                     "  Electrostatic part change: % 25.12f Ha\n"
-                    "  Polarization part change: % 25.12f Ha\n",
-            elec_c + pol_c - elec_n - pol_n, elec_c - elec_n, pol_c - pol_n);
+                    "  induction part change: % 25.12f Ha\n",
+            elec_n + pol_n - elec_c - pol_c, elec_n - elec_c, pol_n - pol_c);
   }
 
   if (anion != NULL) {
@@ -421,17 +421,17 @@ void calc_ionization_energy(cluster *pcls, double *cation, double *anion) {
     fprintf(stdout, "Calculate induced dipoles...\n");
     polarize_scf(pcls);
 
-    fprintf(stdout, "Calculate polarization energy <pol_a>...\n");
+    fprintf(stdout, "Calculate induction energy <pol_a>...\n");
 #pragma omp parallel for schedule(dynamic) reduction(+ : pol_a)
     for (size_t i = 0; i < pcls->n_include; ++i) {
-      pol_a += calc_fragment_polarization_energy(pcls->polfrag_ptr +
+      pol_a += calc_fragment_induction_energy(pcls->polfrag_ptr +
                                                  pcls->include_ptr[i]);
     }
-    fprintf(stdout, "Total polarization energy(cluster): % 25.12f Ha\n", pol_a);
-    fprintf(stdout, "Total energy change: % 25.12f Ha\n"
+    fprintf(stdout, "Total induction energy(cluster): % 25.12f Ha\n", pol_a);
+    fprintf(stdout, "Polarization energy of anion: % 25.12f Ha\n"
                     "  Electrostatic part change: % 25.12f Ha\n"
-                    "  Polarization part change: % 25.12f Ha\n",
-            elec_a + pol_a - elec_n - pol_n, elec_a - elec_n, pol_a - pol_n);
+                    "  induction part change: % 25.12f Ha\n",
+            elec_n + pol_n - elec_a - pol_a, elec_n - elec_a, pol_n - pol_a);
   }
 
   for (size_t n = 0; n < pcls->n_include; ++n) {
@@ -442,7 +442,7 @@ void calc_ionization_energy(cluster *pcls, double *cation, double *anion) {
   pfield = NULL;
 
   if (cation != NULL) {
-    *cation = elec_c + pol_c - elec_n - pol_n;
+    *cation = elec_n + pol_n - elec_c - pol_c;
   }
 
   if (anion != NULL) {
