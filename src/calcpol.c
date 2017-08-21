@@ -6,8 +6,9 @@
 #include "utils.h"
 
 static void useage(void) {
-  fprintf(stderr, "clacpol [input] [charge] [center] [full_radius] [pol_radius] "
-                  "[nthread]\n");
+  fprintf(stderr,
+          "clacpol [input] [charge] [center] [full_radius] [pol_radius] "
+          "[nthread]\n");
 }
 
 int main(int argc, char *argv[]) {

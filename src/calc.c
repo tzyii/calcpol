@@ -96,6 +96,23 @@ static void polarize_scf(cluster *pcls) {
   }
 }
 
+static void savedipole(cluster *pcls, FILE *fp) {
+  vector dip;
+  pol_fragment *pfrag;
+  pol_point_status *ppstat;
+
+  for (size_t i = 0; i < pcls->n_include; ++i) {
+    pfrag = pcls->polfrag_ptr + pcls->include_ptr[i];
+    vector_zero(dip);
+    for (size_t j = 0; j < pfrag->original->std_ptr->n_pol_points; ++j) {
+      ppstat = pfrag->pol_status + j;
+      vector_sum_inplace(dip, ppstat->dipole);
+    }
+    fprintf(fp, "%-8zu : % 25.12f % 25.12f % 25.12f\n", i, dip[0], dip[1],
+            dip[2]);
+  }
+}
+
 double calc_induction_energy(cluster *pcls) {
   double energy = 0.0, convergence, mix;
 
@@ -117,7 +134,7 @@ double calc_induction_energy(cluster *pcls) {
 #pragma omp parallel for schedule(dynamic) reduction(+ : energy)
   for (size_t i = 0; i < pcls->n_include; ++i) {
     energy += calc_fragment_induction_energy(pcls->polfrag_ptr +
-                                                pcls->include_ptr[i]);
+                                             pcls->include_ptr[i]);
   }
 
   return energy;
@@ -138,6 +155,7 @@ void calc_polarization_energy(cluster *pcls, double *cation, double *anion) {
   double pol_n = 0.0, pol_c = 0.0, pol_a = 0.0;
   size_t npoint = 0;
   vector **pfield;
+  FILE *fp;
 
   pfield = galloc(pcls->n_include * sizeof(vector *));
   for (size_t n = 0; n < pcls->n_include; ++n) {
@@ -217,22 +235,23 @@ void calc_polarization_energy(cluster *pcls, double *cation, double *anion) {
     dq_n += denergy.dq;
     qq_n += denergy.qq;
   }
-  fprintf(stdout,
-          "Total electrostatic energy(central molecule with others): % 25.12f Ha\n"
-          "  nuclear    -    nuclear: % 25.12f Ha\n"
-          "  nuclear    -   momopole: % 25.12f Ha\n"
-          "  nuclear    -     dipole: % 25.12f Ha\n"
-          "  nuclear    - quadrupole: % 25.12f Ha\n"
-          "  nuclear    -   octopole: % 25.12f Ha\n"
-          "  monopole   -   monopole: % 25.12f Ha\n"
-          "  monopole   -     dipole: % 25.12f Ha\n"
-          "  monopole   - quadrupole: % 25.12f Ha\n"
-          "  monopole   -   octopole: % 25.12f Ha\n"
-          "  dipole     -     dipole: % 25.12f Ha\n"
-          "  dipole     - quadrupole: % 25.12f Ha\n"
-          "  quadrupole - quadrupole: % 25.12f Ha\n",
-          elec_n, nn_n, nm_n, nd_n, nq_n, no_n, mm_n, md_n, mq_n, mo_n, dd_n,
-          dq_n, qq_n);
+  fprintf(
+      stdout,
+      "Total electrostatic energy(central molecule with others): % 25.12f Ha\n"
+      "  nuclear    -    nuclear: % 25.12f Ha\n"
+      "  nuclear    -   momopole: % 25.12f Ha\n"
+      "  nuclear    -     dipole: % 25.12f Ha\n"
+      "  nuclear    - quadrupole: % 25.12f Ha\n"
+      "  nuclear    -   octopole: % 25.12f Ha\n"
+      "  monopole   -   monopole: % 25.12f Ha\n"
+      "  monopole   -     dipole: % 25.12f Ha\n"
+      "  monopole   - quadrupole: % 25.12f Ha\n"
+      "  monopole   -   octopole: % 25.12f Ha\n"
+      "  dipole     -     dipole: % 25.12f Ha\n"
+      "  dipole     - quadrupole: % 25.12f Ha\n"
+      "  quadrupole - quadrupole: % 25.12f Ha\n",
+      elec_n, nn_n, nm_n, nd_n, nq_n, no_n, mm_n, md_n, mq_n, mo_n, dd_n, dq_n,
+      qq_n);
 
   fprintf(stdout,
           "Calculate fields upon polarizable molecules exerted by "
@@ -263,11 +282,16 @@ void calc_polarization_energy(cluster *pcls, double *cation, double *anion) {
   fprintf(stdout, "Calculate induced dipoles...\n");
   polarize_scf(pcls);
 
+  fprintf(stdout, "Write induced dipoles to \"dipole.dat\"...\n");
+  fp = fopen("dipole.dat", "w");
+  savedipole(pcls, fp);
+  fclose(fp);
+
   fprintf(stdout, "Calculate induction energy <pol_n>...\n");
 #pragma omp parallel for schedule(dynamic) reduction(+ : pol_n)
   for (size_t i = 0; i < pcls->n_include; ++i) {
     pol_n += calc_fragment_induction_energy(pcls->polfrag_ptr +
-                                               pcls->include_ptr[i]);
+                                            pcls->include_ptr[i]);
   }
   fprintf(stdout, "Total induction energy(cluster): % 25.12f Ha\n", pol_n);
 
@@ -302,20 +326,20 @@ void calc_polarization_energy(cluster *pcls, double *cation, double *anion) {
       dq_c += denergy.dq;
       qq_c += denergy.qq;
     }
-    fprintf(stdout,
-            "Total electrostatic energy(central molecule with others): % 25.12f Ha\n"
-            "  nuclear    -    nuclear: % 25.12f Ha\n"
-            "  nuclear    -   momopole: % 25.12f Ha\n"
-            "  nuclear    -     dipole: % 25.12f Ha\n"
-            "  nuclear    - quadrupole: % 25.12f Ha\n"
-            "  nuclear    -   octopole: % 25.12f Ha\n"
-            "  monopole   -   monopole: % 25.12f Ha\n"
-            "  monopole   -     dipole: % 25.12f Ha\n"
-            "  monopole   - quadrupole: % 25.12f Ha\n"
-            "  monopole   -   octopole: % 25.12f Ha\n"
-            "  dipole     -     dipole: % 25.12f Ha\n"
-            "  dipole     - quadrupole: % 25.12f Ha\n"
-            "  quadrupole - quadrupole: % 25.12f Ha\n",
+    fprintf(stdout, "Total electrostatic energy(central molecule with others): "
+                    "% 25.12f Ha\n"
+                    "  nuclear    -    nuclear: % 25.12f Ha\n"
+                    "  nuclear    -   momopole: % 25.12f Ha\n"
+                    "  nuclear    -     dipole: % 25.12f Ha\n"
+                    "  nuclear    - quadrupole: % 25.12f Ha\n"
+                    "  nuclear    -   octopole: % 25.12f Ha\n"
+                    "  monopole   -   monopole: % 25.12f Ha\n"
+                    "  monopole   -     dipole: % 25.12f Ha\n"
+                    "  monopole   - quadrupole: % 25.12f Ha\n"
+                    "  monopole   -   octopole: % 25.12f Ha\n"
+                    "  dipole     -     dipole: % 25.12f Ha\n"
+                    "  dipole     - quadrupole: % 25.12f Ha\n"
+                    "  quadrupole - quadrupole: % 25.12f Ha\n",
             elec_c, nn_c, nm_c, nd_c, nq_c, no_c, mm_c, md_c, mq_c, mo_c, dd_c,
             dq_c, qq_c);
 
@@ -340,11 +364,16 @@ void calc_polarization_energy(cluster *pcls, double *cation, double *anion) {
     fprintf(stdout, "Calculate induced dipoles...\n");
     polarize_scf(pcls);
 
+    fprintf(stdout, "Write induced dipoles to \"dipole+1.dat\"...\n");
+    fp = fopen("dipole+1.dat", "w");
+    savedipole(pcls, fp);
+    fclose(fp);
+
     fprintf(stdout, "Calculate induction energy <pol_c>...\n");
 #pragma omp parallel for schedule(dynamic) reduction(+ : pol_c)
     for (size_t i = 0; i < pcls->n_include; ++i) {
       pol_c += calc_fragment_induction_energy(pcls->polfrag_ptr +
-                                                 pcls->include_ptr[i]);
+                                              pcls->include_ptr[i]);
     }
     fprintf(stdout, "Total induction energy(cluster): % 25.12f Ha\n", pol_c);
     fprintf(stdout, "Polarization energy of cation: % 25.12f Ha\n"
@@ -383,20 +412,20 @@ void calc_polarization_energy(cluster *pcls, double *cation, double *anion) {
       dq_a += denergy.dq;
       qq_a += denergy.qq;
     }
-    fprintf(stdout,
-            "Total electrostatic energy(central molecule with others): % 25.12f Ha\n"
-            "  nuclear    -    nuclear: % 25.12f Ha\n"
-            "  nuclear    -   momopole: % 25.12f Ha\n"
-            "  nuclear    -     dipole: % 25.12f Ha\n"
-            "  nuclear    - quadrupole: % 25.12f Ha\n"
-            "  nuclear    -   octopole: % 25.12f Ha\n"
-            "  monopole   -   monopole: % 25.12f Ha\n"
-            "  monopole   -     dipole: % 25.12f Ha\n"
-            "  monopole   - quadrupole: % 25.12f Ha\n"
-            "  monopole   -   octopole: % 25.12f Ha\n"
-            "  dipole     -     dipole: % 25.12f Ha\n"
-            "  dipole     - quadrupole: % 25.12f Ha\n"
-            "  quadrupole - quadrupole: % 25.12f Ha\n",
+    fprintf(stdout, "Total electrostatic energy(central molecule with others): "
+                    "% 25.12f Ha\n"
+                    "  nuclear    -    nuclear: % 25.12f Ha\n"
+                    "  nuclear    -   momopole: % 25.12f Ha\n"
+                    "  nuclear    -     dipole: % 25.12f Ha\n"
+                    "  nuclear    - quadrupole: % 25.12f Ha\n"
+                    "  nuclear    -   octopole: % 25.12f Ha\n"
+                    "  monopole   -   monopole: % 25.12f Ha\n"
+                    "  monopole   -     dipole: % 25.12f Ha\n"
+                    "  monopole   - quadrupole: % 25.12f Ha\n"
+                    "  monopole   -   octopole: % 25.12f Ha\n"
+                    "  dipole     -     dipole: % 25.12f Ha\n"
+                    "  dipole     - quadrupole: % 25.12f Ha\n"
+                    "  quadrupole - quadrupole: % 25.12f Ha\n",
             elec_a, nn_a, nm_a, nd_a, nq_a, no_a, mm_a, md_a, mq_a, mo_a, dd_a,
             dq_a, qq_a);
 
@@ -421,11 +450,16 @@ void calc_polarization_energy(cluster *pcls, double *cation, double *anion) {
     fprintf(stdout, "Calculate induced dipoles...\n");
     polarize_scf(pcls);
 
+    fprintf(stdout, "Write induced dipoles to \"dipole-1.dat\"...\n");
+    fp = fopen("dipole-1.dat", "w");
+    savedipole(pcls, fp);
+    fclose(fp);
+
     fprintf(stdout, "Calculate induction energy <pol_a>...\n");
 #pragma omp parallel for schedule(dynamic) reduction(+ : pol_a)
     for (size_t i = 0; i < pcls->n_include; ++i) {
       pol_a += calc_fragment_induction_energy(pcls->polfrag_ptr +
-                                                 pcls->include_ptr[i]);
+                                              pcls->include_ptr[i]);
     }
     fprintf(stdout, "Total induction energy(cluster): % 25.12f Ha\n", pol_a);
     fprintf(stdout, "Polarization energy of anion: % 25.12f Ha\n"

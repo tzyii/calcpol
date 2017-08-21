@@ -87,9 +87,10 @@ std_efp_info *parse_efp(char filename[]) {
       continue;
     }
   }
-  list_dump(pmult, sizeof(mult_point), CAST_PTR(&(eptr->mult_ptr), void *));
-  list_dump(ppol, sizeof(pol_point), CAST_PTR(&(eptr->pol_ptr), void *));
-  list_dump(pbond, sizeof(bond), CAST_PTR(&(eptr->bond_ptr), void *));
+  list_dump(pmult, sizeof(mult_point), CAST_PTR(&(eptr->mult_ptr), void *),
+            NULL);
+  list_dump(ppol, sizeof(pol_point), CAST_PTR(&(eptr->pol_ptr), void *), NULL);
+  list_dump(pbond, sizeof(bond), CAST_PTR(&(eptr->bond_ptr), void *), NULL);
   gen_axis(eptr);
   gen_masscenter(eptr);
   list_clear(&pmult);

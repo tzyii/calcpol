@@ -268,7 +268,7 @@ void fragment_load(FILE *fp, box *pbox) {
     }
   }
   list_dump(fragments_list, sizeof(fragment),
-            CAST_PTR(&(pbox->frag_ptr), void *));
+            CAST_PTR(&(pbox->frag_ptr), void *), NULL);
   list_clear(&fragments_list);
 
   for (n = 0; n < pbox->n_frag; ++n) {
@@ -415,7 +415,7 @@ static inline void gen_cells(supercell *scptr, size_t cellsum) {
     }
   }
   scptr->n_cells = list_length(lptr);
-  list_dump(lptr, sizeof(vector), CAST_PTR(&(scptr->cell_ptr), void *));
+  list_dump(lptr, sizeof(vector), CAST_PTR(&(scptr->cell_ptr), void *), NULL);
   list_clear(&lptr);
 }
 
@@ -446,12 +446,13 @@ void clear_scellptr(void) {
 void gen_cluster(cluster *cls, const box *pbox, double radius,
                  size_t idx_center) {
   fragment *pfrag;
-  vector *pmove_origin, center, pbc, tmpcenter;
-  list_ptr lptr = NULL, scellptr;
+  vector *pmove_origin, center, pbc, tmpcenter, mcvec;
+  list_ptr lptr = NULL, scellptr = NULL, mclptr = NULL;
   const supercell *scptr;
   pol_fragment *ptr;
-  size_t n, k, len, cellsum, notfound;
-  double r, r_min;
+  size_t n, k, len, cellsum, notfound, tmp;
+  double r, r_min, *mcptr, *mcsptr;
+  FILE *fp;
 
   cls->center = 0;
   cls->n_polfrags = 0;
@@ -475,12 +476,12 @@ void gen_cluster(cluster *cls, const box *pbox, double radius,
         r = vector_len(tmpcenter);
         if (r < radius) {
           ptr = galloc(sizeof(pol_fragment));
+          mcptr = galloc(sizeof(double));
           ptr->original = pfrag;
+          *mcptr = r;
           vector_sub(tmpcenter, pmove_origin[idx_center], ptr->masscenter);
           list_append(&lptr, ptr);
-          if (scalar_equal(r, 0.0)) {
-            cls->center = cls->n_polfrags;
-          }
+          list_append(&mclptr, mcptr);
           cls->n_polfrags += 1;
         }
         if (r_min > r) {
@@ -494,16 +495,37 @@ void gen_cluster(cluster *cls, const box *pbox, double radius,
     } while (notfound <= 3);
   }
 
+  list_dump(mclptr, sizeof(double), CAST_PTR(&mcsptr, void *), NULL);
   cls->n_include = cls->n_polfrags;
   cls->include_ptr = galloc(cls->n_polfrags * sizeof(size_t));
   for (n = 0; n < cls->n_polfrags; ++n) {
     cls->include_ptr[n] = n;
   }
+  for (size_t i = 0; i + 1 < cls->n_polfrags; ++i) {
+    for (size_t j = 0; i + j + 1 < cls->n_polfrags; ++j) {
+      if (mcsptr[cls->include_ptr[j]] > mcsptr[cls->include_ptr[j + 1]]) {
+        tmp = cls->include_ptr[j];
+        cls->include_ptr[j] = cls->include_ptr[j + 1];
+        cls->include_ptr[j + 1] = tmp;
+      }
+    }
+  }
 
   free(pmove_origin);
   clear_scellptr();
-  list_dump(lptr, sizeof(pol_fragment), CAST_PTR(&(cls->polfrag_ptr), void *));
+  list_dump(lptr, sizeof(pol_fragment), CAST_PTR(&(cls->polfrag_ptr), void *),
+            cls->include_ptr);
   list_clear(&lptr);
+  list_clear(&mclptr);
+  free(mcsptr);
+
+  fp = fopen("masscenter.dat", "w");
+  for (size_t i = 0; i < cls->n_polfrags; ++i) {
+    vector_scalar_mul(cls->polfrag_ptr[i].masscenter, 1 / BOHR, mcvec);
+    fprintf(fp, "%-8zu : % 25.12f % 25.12f % 25.12f\n", i, mcvec[0], mcvec[1],
+            mcvec[2]);
+  }
+  fclose(fp);
 }
 
 void set_polarizable_include(cluster *cls, double radius) {
@@ -513,6 +535,8 @@ void set_polarizable_include(cluster *cls, double radius) {
     if (vector_dist(cls->polfrag_ptr[cls->center].masscenter,
                     cls->polfrag_ptr[i].masscenter) < radius) {
       cls->include_ptr[(cls->n_include)++] = i;
+    } else {
+      break;
     }
   }
 }

@@ -38,15 +38,22 @@ size_t list_length(list_ptr lptr) {
   return len;
 }
 
-void list_dump(list_ptr lptr, size_t size, void **dest_ptr) {
+void list_dump(list_ptr lptr, size_t size, void **dest_ptr, size_t *order) {
   void *ptr;
   size_t nmemb = list_length(lptr);
   *dest_ptr = ptr = galloc(nmemb * size);
 
-  while (lptr != NULL) {
-    memcpy(ptr, lptr->pelem, size);
-    ptr += size;
-    lptr = lptr->next;
+  if (order == NULL) {
+    while (lptr != NULL) {
+      memcpy(ptr, lptr->pelem, size);
+      ptr += size;
+      lptr = lptr->next;
+    }
+  } else {
+    for (size_t i = 0; i < nmemb; ++i) {
+      memcpy(ptr, list_index(lptr, order[i]), size);
+      ptr += size;
+    }
   }
 }
 

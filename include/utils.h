@@ -27,7 +27,7 @@ void *list_index(list_ptr lptr, size_t idx);
 
 size_t list_length(list_ptr lptr);
 
-void list_dump(list_ptr lptr, size_t size, void **dest_ptr);
+void list_dump(list_ptr lptr, size_t size, void **dest_ptr, size_t *order);
 
 void *list_lookup(list_ptr lptr, list_lookup_function lookup,
                   const void *target);
